@@ -20,57 +20,67 @@ type Insert struct {
 
 	stmt     *sql.Stmt
 	bindvars []driver.Value
+	result   result
 }
 
-func NewInsert(db *sql.DB, sql string, casts []string) Insert {
-	return Insert{db, sql, casts, nil, nil}
+func NewInsert(db *sql.DB, sql string, casts []string) *Insert {
+	return &Insert{db, sql, casts, nil, nil, result{}}
 }
 
 const MaxBindVars = 65535
 
 // Exec runs the Insert statement in as many batches as required to allow
 // Insert.DB to fill placeholder vars. The number of batches which will be run
-// is equal to len(casts) * len(rows) / MaxBindVars + 1. It returns an array of
-// results and the first error, if any, which occurs will short-circuit the
+// is equal to len(casts) * len(rows) / MaxBindVars + 1. It returns sql.Result
+// and the first error, if any, which occurs will short-circuit the
 // operation.
-func (s Insert) Exec(rows [][]driver.Value) ([]sql.Result, error) {
+func (s *Insert) Exec(rows [][]driver.Value) (sql.Result, error) {
 	var (
-		results   = []sql.Result{}
 		leftovers int
+		err       error
 	)
 
 	batches := len(s.Casts) * len(rows) / MaxBindVars
 	if batches > 0 {
 		batchSize := len(rows) / (batches + 1)
 		leftovers = len(rows) - batchSize*batches
-		fmt.Println(len(rows), batches, batchSize, leftovers, batchSize*batches+leftovers)
-		err := s.prepare(batchSize)
-		defer s.stmt.Close()
-		if err != nil {
-			return results, err
+		for leftovers > batchSize {
+			batches++
+			leftovers -= batchSize
 		}
-		for i := 0; i < batches; i++ {
-			args := []interface{}{}
-			for _, row := range rows[i*batchSize : i*batchSize+batchSize] {
-				for _, arg := range row {
-					args = append(args, arg)
-				}
-			}
-			res, err := s.stmt.Exec(args...)
+		err = func() error {
+			err := s.prepare(batchSize)
 			if err != nil {
-				return results, err
+				return err
 			}
-			results = append(results, res)
+			defer s.stmt.Close()
+			for i := 0; i < batches; i++ {
+				args := []interface{}{}
+				for _, row := range rows[i*batchSize : i*batchSize+batchSize] {
+					for _, arg := range row {
+						args = append(args, arg)
+					}
+				}
+				res, err := s.stmt.Exec(args...)
+				if err != nil {
+					return err
+				}
+				s.result.Add(res)
+			}
+			return nil
+		}()
+		if err != nil {
+			return s.result, err
 		}
 	} else {
 		leftovers = len(rows)
 	}
 
-	err := s.prepare(leftovers)
-	defer s.stmt.Close()
+	err = s.prepare(leftovers)
 	if err != nil {
-		return results, err
+		return s.result, err
 	}
+	defer s.stmt.Close()
 	args := []interface{}{}
 	for _, row := range rows[len(rows)-leftovers:] {
 		for _, arg := range row {
@@ -79,9 +89,10 @@ func (s Insert) Exec(rows [][]driver.Value) ([]sql.Result, error) {
 	}
 	res, err := s.stmt.Exec(args...)
 	if err != nil {
-		return results, err
+		return s.result, err
 	}
-	return append(results, res), nil
+	s.result.Add(res)
+	return s.result, nil
 }
 
 func (s *Insert) prepare(count int) error {
