@@ -37,7 +37,12 @@ import (
   "github.com/calebthompson/bulk"
 )
 
-func InsertPeople(people []models.Person) (sql.Result, error) {
+type Person struct {
+  ID   int64
+  Name string
+}
+
+func InsertPeople(people []Person) (sql.Result, error) {
   rows := [][]driver.Value{}
   for _, a := range people {
     rows = append(rows, []driver.Value{
