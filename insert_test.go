@@ -21,7 +21,7 @@ func TestInsert_Exec(t *testing.T) {
 		{2, "Jinzhu"},
 	}
 
-	_, err = NewInsert(
+	result, err = NewInsert(
 		db,
 		"INSERT INTO people (id, name) VALUES <values>",
 		[]string{"bigint", ""},
@@ -33,5 +33,13 @@ func TestInsert_Exec(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+
+	if id, _ := result.LastInsertId(); id != 2 {
+		t.Fatal("Expected LastInsertId to be 2")
+	}
+
+	if id, _ := result.RowsAffected(); id != 2 {
+		t.Fatal("Expected RowsAffected to be 2")
 	}
 }

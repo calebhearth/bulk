@@ -15,7 +15,7 @@ func (r result) RowsAffected() (int64, error) {
 	return r.rowsAffected, nil
 }
 
-func (r *result) Add(res sql.Result) {
+func (r *result) add(res sql.Result) {
 	id, _ := res.LastInsertId()
 	r.lastInsertId = id
 	rows, _ := res.RowsAffected()

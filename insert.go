@@ -65,7 +65,7 @@ func (s *Insert) Exec(rows [][]driver.Value) (sql.Result, error) {
 				if err != nil {
 					return err
 				}
-				s.result.Add(res)
+				s.result.add(res)
 			}
 			return nil
 		}()
@@ -91,7 +91,7 @@ func (s *Insert) Exec(rows [][]driver.Value) (sql.Result, error) {
 	if err != nil {
 		return s.result, err
 	}
-	s.result.Add(res)
+	s.result.add(res)
 	return s.result, nil
 }
 
